@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>T-Rex Game</title>
+    <style>
+        canvas {
+            border: 2px solid black;
+            display: block;
+            margin: auto;
+        }
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        .message {
+            background-color: #f9f9f9;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            text-align: center;
+        }
+        h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+        p {
+            color: #666;
+            margin-bottom: 20px;
+        }
+        button {
+            background-color: #4caf50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
+    <div id="gameOverOverlay" class="overlay" style="display: none;">
+        <div class="message">
+            <h2>Game Over!</h2>
+            <p>Your score: <span id="scoreDisplay"></span> meters</p>
+            <button onclick="restartGame()">Restart</button>
+        </div>
+    </div>
+    <script>
+        let canvas = document.getElementById("gameCanvas");
+        let ctx = canvas.getContext("2d");
+        let tRexImg = new Image();
+        let obstacleImg = new Image();
+        tRexImg.src = 't-rex.jpg'; // Ścieżka do pliku z obrazkiem T-Rexa
+        obstacleImg.src = 'obstacle.jpg'; // Ścieżka do pliku z obrazkiem przeszkody
+        let tRex = { x: 50, y: 300, width: 80, height: 80, jumping: false, jumpHeightShort: 280, jumpHeightLong: 320, jumpSpeed: 10, speed: 12 }; // Zwiększona wartość skoku T-Rexa
+        let obstacles = [];
+        let score = 0;
+        let distance = 0; // Licznik przebytych metrów
+        let floorHeight = 20; // Wysokość podłogi
+        let minObstacleInterval = 400; // Minimalny interwał między przeszkodami
+        let maxObstacleInterval = 800; // Maksymalny interwał między przeszkodami
+        let lastObstacleX = 0; // Ostatnia pozycja X przeszkody
+        let spaceKeyIsDown = false; // Flaga informująca, czy klawisz spacji jest przytrzymany
+        let gameOver = false;
+
+        // Funkcja do rysowania postaci T-Rexa
+        function drawTrex() {
+            ctx.drawImage(tRexImg, tRex.x, tRex.y, tRex.width, tRex.height);
+        }
+
+        // Funkcja do rysowania przeszkód
+        function drawObstacles() {
+            obstacles.forEach(obstacle => {
+                ctx.drawImage(obstacleImg, obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+            });
+        }
+
+        // Funkcja do rysowania podłogi
+        function drawFloor() {
+            ctx.fillStyle = "grey";
+            ctx.fillRect(0, canvas.height - floorHeight, canvas.width, floorHeight);
+        }
+
+        // Funkcja do sprawdzania kolizji między postacią a przeszkodami
+        function checkCollision() {
+            obstacles.forEach(obstacle => {
+                if (tRex.x < obstacle.x + obstacle.width &&
+                    tRex.x + tRex.width > obstacle.x &&
+                    tRex.y < obstacle.y + obstacle.height &&
+                    tRex.y + tRex.height > obstacle.y) {
+                    // Kolizja! Koniec gry
+                    gameOver = true;
+                    showGameOverMessage();
+                }
+            });
+        }
+
+        // Funkcja do wyświetlania komunikatu o końcu gry
+        function showGameOverMessage() {
+            document.getElementById("scoreDisplay").innerText = Math.floor(distance);
+            document.getElementById("gameOverOverlay").style.display = "flex";
+        }
+
+        // Funkcja do restartowania gry
+        function restartGame() {
+            document.location.reload();
+        }
+
+        // Funkcja do głównego rysowania i aktualizacji gry
+        function updateGame() {
+            if (!gameOver) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // Rysowanie T-Rexa
+                drawTrex();
+
+                // Rysowanie przeszkód
+                drawObstacles();
+
+                // Rysowanie podłogi
+                drawFloor();
+
+                // Aktualizacja pozycji T-Rexa
+                if (tRex.jumping && tRex.y > canvas.height - floorHeight - tRex.jumpHeight) tRex.y -= tRex.jumpSpeed; // Skok w górę
+                if (tRex.y <= canvas.height - floorHeight - tRex.jumpHeight) { // Sprawdzenie, czy T-Rex osiągnął maksymalną wysokość skoku
+                    tRex.jumping = false;
+                }
+                if (!tRex.jumping && tRex.y < canvas.height - floorHeight - tRex.height) tRex.y += tRex.jumpSpeed; // Spadek na ziemię
+                if (tRex.y >= canvas.height - floorHeight - tRex.height) { // Sprawdzenie, czy T-Rex dotknął podłogi
+                    tRex.y = canvas.height - floorHeight - tRex.height; // Ustawienie T-Rexa na podłodze
+                }
+
+                // Generowanie nowej przeszkody po losowym interwale
+                if (obstacles.length === 0 || obstacles[obstacles.length - 1].x < canvas.width - lastObstacleX) {
+                    let obstacleX = canvas.width;
+                    let obstacleY = canvas.height - floorHeight - 475 / 8; // Wysokość przeszkody
+                    let obstacleWidth = 205 / 8; // Szerokość przeszkody
+                    let obstacleHeight = 475 / 8; // Wysokość przeszkody
+                    obstacles.push({ x: obstacleX, y: obstacleY, width: obstacleWidth, height: obstacleHeight }); // Wymiary przeszkody (pomniejszone dwukrotnie z zachowaniem proporcji)
+                    lastObstacleX = Math.random() * (maxObstacleInterval - minObstacleInterval) + minObstacleInterval; // Losowy interwał
+                }
+
+                // Przesuwanie przeszkód w lewo
+                obstacles.forEach(obstacle => {
+                    obstacle.x -= tRex.speed;
+                });
+
+                // Usuwanie przeszkód, które opuściły ekran
+                obstacles = obstacles.filter(obstacle => obstacle.x > 0);
+
+                // Sprawdzanie kolizji
+                checkCollision();
+
+                // Zwiększanie wyniku
+                distance += tRex.speed / 10; // Zwiększenie odległości o szybkość T-Rexa (przyjmując 1 punkt na 10 pikseli)
+
+                // Wyświetlanie odległości
+                ctx.fillStyle = "black";
+                ctx.font = "20px Arial";
+                ctx.fillText("Distance: " + Math.floor(distance) + " meters", 10, 30);
+
+                // Sprawdzenie, czy klawisz spacji jest przytrzymany i odpowiednie ustawienie wysokości skoku T-Rexa
+                if (spaceKeyIsDown) {
+                    tRex.jumpHeight = tRex.jumping ? tRex.jumpHeightLong : tRex.jumpHeightShort;
+                } else {
+                    tRex.jumpHeight = 200;
+                }
+            }
+
+            // Wywołanie funkcji updateGame co 20 ms (50 klatek na sekundę)
+            requestAnimationFrame(updateGame);
+        }
+
+        // Obsługa klawiszy - skok T-Rexa
+        document.addEventListener("keydown", function (event) {
+            if (event.code === "Space" && tRex.y === canvas.height - floorHeight - tRex.height) { // Możliwość skoku tylko gdy T-Rex jest na ziemi
+                tRex.jumping = true;
+                spaceKeyIsDown = true; // Ustawienie flagi na true, gdy klawisz spacji jest przytrzymany
+            }
+        });
+
+        document.addEventListener("keyup", function (event) {
+            if (event.code === "Space" && tRex.jumping) { // Jeśli skok trwa i spacja zostanie zwolniona, oblicz wysokość skoku na podstawie czasu wciśnięcia
+                spaceKeyIsDown = false; // Ustawienie flagi na false, gdy klawisz spacji zostanie zwolniony
+            }
+        });
+
+        // Rozpoczęcie gry
+        updateGame();
+    </script>
+</body>
+</html>
